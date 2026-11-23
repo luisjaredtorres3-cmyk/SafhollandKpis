@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard CFE — Seguimiento al KPI</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary-dark: #0f172a;
+      --orange-header: #f39200;
+      --green-excel: #10b981;
+      --green-excel-light: #d1fae5;
+      --border-color: #cbd5e1;
+      --green: #15803d;
+      --green-bg: #dcfce7;
+      --red: #b91c1c;
+      --red-bg: #fee2e2;
+      --muted: #64748b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+      background-color: #f1f5f9;
+      margin: 0;
+      padding: 0;
+      color: #1e293b;
+    }
+
+    .top-banner-container {
+      width: 100%;
+      background-color: var(--orange-header);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      padding: 8px 12px;
+    }
+
+    .banner-img { height: 50px; width: auto; object-fit: contain; }
+
+    .container { max-width: 1600px; margin: 20px auto; padding: 0 20px; }
+    .dashboard-title {
+      font-size: 22px; font-weight: 800; color: #0f172a;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      margin: 15px 0 20px; text-align: center;
+    }
+
+    .kpi-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 15px; margin-bottom: 20px;
+    }
+
+    .kpi-card {
+      background: white; border-radius: 8px; padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0; border-left: 4px solid var(--primary-dark);
+    }
+    .kpi-card.solar { border-left-color: #10b981; }
+    .kpi-card.cfe { border-left-color: #3b82f6; }
+    .kpi-card.total { border-left-color: #0f172a; }
+    .kpi-card.avg { border-left-color: #f59e0b; }
+    .kpi-card.variation { border-left-color: #8b5cf6; }
+    .kpi-card-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+    .kpi-card-value { font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 6px; }
+    .kpi-card-sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+    .upload-section {
+      display: flex; align-items: center; justify-content: space-between;
+      background: white; padding: 12px 20px; border: 1px solid #e2e8f0;
+      margin-bottom: 20px; border-radius: 8px; flex-wrap: wrap; gap: 12px;
+    }
+    .btn-file, .btn-export, .btn-goal {
+      padding: 8px 18px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; font-weight: 600; border: none; color: white;
+      transition: background 0.2s; display: inline-block;
+    }
+    .btn-file { background-color: #1e293b; }
+    .btn-file:hover { background-color: #0f172a; }
+    .btn-export { background-color: #16a34a; }
+    .btn-export:hover { background-color: #15803d; }
+    .btn-goal { background: #1d4ed8; }
+    .btn-goal:hover { background: #1e40af; }
+    input[type="file"] { display: none; }
+
+    select, input[type="number"] {
+      padding: 7px 12px; font-size: 13px; font-weight: 600;
+      border-radius: 6px; border: 1px solid #cbd5e1;
+      background-color: #f8fafc; color: #0f172a; outline: none;
+    }
+
+    .card-panel, .chart-box {
+      background: white; border-radius: 8px; padding: 18px;
+      border: 1px solid #e2e8f0; margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 12px;
+      color: #0f172a; text-transform: uppercase; text-align: center;
+    }
+    .table-container { overflow-x: auto; }
+
+    table.excel-table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      font-size: 11px; text-align: center;
+    }
+    table.excel-table th, table.excel-table td {
+      border-right: 1px solid var(--border-color);
+      border-bottom: 1px solid var(--border-color);
+      padding: 6px 7px; height: 32px; min-width: 62px; white-space: nowrap;
+    }
+    table.excel-table th {
+      background-color: #f1f5f9; font-weight: 700;
+      border-top: 1px solid var(--border-color);
+    }
+    table.excel-table th:first-child, table.excel-table td:first-child { border-left: 1px solid var(--border-color); }
+    .col-kpi {
+      text-align: left !important; padding-left: 10px !important;
+      font-weight: 700; min-width: 180px; background-color: #ffffff !important;
+      position: sticky; left: 0; z-index: 2;
+      border-right: 2px solid #cbd5e1 !important;
+    }
+    .cell-green { background-color: var(--green-excel-light) !important; font-weight: 600; color: #065f46; }
+    .cell-total-row { font-weight: 800; background-color: #f8fafc; }
+    .kpi-input {
+      width: 100%; height: 100%; box-sizing: border-box; border: none;
+      background: transparent; text-align: center; font-size: 12px;
+      color: inherit; font-weight: inherit; padding: 0;
+    }
+    .kpi-input:focus { background: #fef08a; outline: 2px solid #f59e0b; }
+    .table-resumen th { background-color: #e2e8f0 !important; }
+    .table-resumen td { background-color: #ffffff; }
+
+    .document-upload-menu { border-top: 4px solid var(--orange-header); margin-top: 20px; margin-bottom: 22px; }
+    .document-upload-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 420px)); gap: 14px; }
+    .document-upload-card {
+      border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px;
+      background: #f8fafc; display: flex; flex-direction: column;
+      align-items: flex-start; gap: 9px; min-width: 0;
+    }
+    .document-upload-card-title { font-size: 13px; font-weight: 800; color: #0f172a; }
+    .document-upload-card-description { font-size: 12px; line-height: 1.45; color: #64748b; }
+    .document-upload-status { font-size: 12px; color: #64748b; overflow-wrap: anywhere; }
+    .document-upload-status.loaded { color: #047857; font-weight: 700; }
+
+    /* Panel de meta mensual */
+    .goal-panel {
+      border: 1px solid #dbeafe; border-top: 4px solid #2563eb;
+      border-radius: 9px; padding: 18px; margin: 12px 0 16px;
+      background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+    }
+    .goal-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .goal-heading h3 { margin: 0; font-size: 15px; color: #0f172a; }
+    .goal-description { color: #64748b; font-size: 12px; line-height: 1.5; margin: 7px 0 14px; }
+    .goal-form { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+    .goal-input-group { display: flex; flex-direction: column; gap: 5px; min-width: 210px; }
+    .goal-input-group label { color: #334155; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+    .goal-input-group input { width: 100%; min-height: 36px; font-size: 14px; background: #fff; }
+    .goal-help { font-size: 11px; color: #94a3b8; margin-top: 9px; }
+    .goal-status-badge { display: inline-flex; align-items: center; border-radius: 30px; padding: 5px 10px; font-size: 11px; font-weight: 800; }
+    .goal-status-badge.good { color: var(--green); background: var(--green-bg); }
+    .goal-status-badge.bad { color: var(--red); background: var(--red-bg); }
+    .goal-status-badge.neutral { color: #475569; background: #e2e8f0; }
+    .goal-stats-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; margin-top: 15px; }
+    .goal-stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 7px; padding: 11px 12px; min-width: 0; }
+    .goal-stat-label { font-size: 10px; color: #64748b; font-weight: 800; text-transform: uppercase; }
+    .goal-stat-value { color: #0f172a; font-size: 18px; font-weight: 800; margin-top: 5px; overflow-wrap: anywhere; }
+    .goal-stat-note { color: #94a3b8; font-size: 10px; margin-top: 2px; }
+    .goal-progress-wrap { margin-top: 14px; }
+    .goal-progress-label { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: #475569; font-weight: 700; margin-bottom: 6px; }
+    .goal-progress-track { width: 100%; height: 12px; overflow: hidden; border-radius: 30px; background: #e2e8f0; }
+    .goal-progress-fill { height: 100%; width: 0; border-radius: 30px; background: #16a34a; transition: width .25s ease; }
+    .goal-progress-fill.over { background: #dc2626; }
+    .goal-table-good { background: #f0fdf4 !important; color: #166534 !important; font-weight: 800; }
+    .goal-table-bad { background: #fef2f2 !important; color: #b91c1c !important; font-weight: 800; }
+    .goal-table-neutral { background: #f8fafc !important; color: #64748b !important; }
+    .goal-note { font-size: 11px; color: #64748b; text-align: center; line-height: 1.5; margin: -4px 0 12px; }
+
+    .weekly-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 5px; }
+    .weekly-panel { padding-top: 12px; padding-bottom: 12px; }
+    .week-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; }
+    .week-title { font-size: 12px; font-weight: 700; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 8px; }
+    .week-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; color: #64748b; }
+    .week-row span:last-child { font-weight: 700; color: #0f172a; }
+
+    .excel-inspector-container { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; }
+    .inspector-controls { display: flex; align-items: center; gap: 15px; margin-bottom: 12px; flex-wrap: wrap; }
+    .sys-note { margin-top: 10px; padding: 10px 12px; border-radius: 6px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 12px; }
+
+    .chart-title { font-size: 15px; font-weight: 700; margin-bottom: 5px; text-align: center; }
+    .chart-subtitle { font-size: 12px; color: #64748b; margin-bottom: 15px; text-align: center; }
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; width: 100%; height: 100%;
+      background: rgba(15,23,42,0.6); backdrop-filter: blur(4px);
+      z-index: 1000; justify-content: center; align-items: center; padding: 15px;
+    }
+    .modal-content { background: white; width: 90%; max-width: 500px; border-radius: 12px; padding: 24px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 16px; }
+    .modal-title { font-size: 16px; font-weight: 800; }
+    .modal-close { background: #f1f5f9; border: none; font-weight: bold; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; }
+    .modal-body-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
+    .modal-body-table th, .modal-body-table td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+    .modal-body-table th { color: #64748b; width: 60%; }
+    .modal-body-table td { font-weight: 700; text-align: right; }
+
+    @media (max-width: 900px) { .goal-stats-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); } }
+    @media (max-width: 720px) {
+      .document-upload-grid { grid-template-columns: 1fr; }
+      .container { padding: 0 10px; }
+      .goal-stats-grid { grid-template-columns: 1fr 1fr; }
+      .goal-form { align-items: stretch; }
+      .goal-input-group { width: 100%; }
+      .upload-section > div:last-child { flex-wrap: wrap; }
+    }
+
+    /* Pantalla de acceso */
+    body.login-locked { overflow: hidden; }
+    body.login-locked > *:not(#loginScreen) { display: none !important; }
+    #loginScreen {
+      position: fixed; inset: 0; z-index: 9999; display: flex;
+      align-items: center; justify-content: center; padding: 22px;
+      background: linear-gradient(135deg, #0f172a 0%, #172554 55%, #1e3a8a 100%);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .login-card {
+      width: 100%; max-width: 410px; background: #fff; border-radius: 18px;
+      padding: 34px 32px; box-shadow: 0 25px 70px rgba(0,0,0,.32);
+    }
+    .login-mark {
+      width: 58px; height: 58px; border-radius: 15px; margin: 0 auto 18px;
+      display: grid; place-items: center; background: #f39200; color: #0f172a;
+      font-size: 24px; font-weight: 900; letter-spacing: -1px;
+    }
+    .login-heading { text-align: center; margin: 0; color: #0f172a; font-size: 24px; font-weight: 800; }
+    .login-caption { text-align: center; color: #64748b; font-size: 13px; margin: 8px 0 25px; line-height: 1.5; }
+    .login-field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+    .login-field label { font-size: 12px; font-weight: 700; color: #334155; }
+    .login-field input {
+      width: 100%; min-height: 45px; border: 1px solid #cbd5e1; border-radius: 8px;
+      padding: 11px 13px; font-size: 14px; color: #0f172a; background: #f8fafc;
+      outline: none; transition: border-color .2s, box-shadow .2s;
+    }
+    .login-field input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.13); background: #fff; }
+    .login-password-wrap { position: relative; }
+    .login-password-wrap input { padding-right: 70px; }
+    .login-show-password {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      border: 0; background: transparent; color: #2563eb; font-size: 11px;
+      font-weight: 700; cursor: pointer; padding: 5px;
+    }
+    .login-submit {
+      width: 100%; min-height: 45px; border: 0; border-radius: 8px;
+      background: #f39200; color: #0f172a; font-size: 14px; font-weight: 800;
+      cursor: pointer; margin-top: 7px; transition: background .2s, transform .2s;
+    }
+    .login-submit:hover { background: #e88500; transform: translateY(-1px); }
+    .login-error { min-height: 18px; color: #b91c1c; font-size: 12px; text-align: center; margin: 12px 0 0; }
+    .login-footnote { border-top: 1px solid #e2e8f0; margin-top: 22px; padding-top: 15px; color: #94a3b8; font-size: 10px; text-align: center; line-height: 1.5; }
+    @media (max-width: 480px) { .login-card { padding: 28px 22px; } .login-heading { font-size: 22px; } }
+
+  </style>
+</head>
+<body class="login-locked">
+
+  <div id="loginScreen">
+    <div class="login-card">
+      <div class="login-mark">CFE</div>
+      <h1 class="login-heading">Iniciar sesión</h1>
+      <p class="login-caption">Dashboard de seguimiento al KPI energético</p>
+      <form id="loginForm">
+        <div class="login-field">
+          <label for="loginUser">Usuario</label>
+          <input id="loginUser" type="text" autocomplete="username" placeholder="Ingresa tu usuario" required>
+        </div>
+        <div class="login-field">
+          <label for="loginPassword">Contraseña</label>
+          <div class="login-password-wrap">
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Ingresa tu contraseña" required>
+            <button class="login-show-password" type="button" id="toggleLoginPassword">Mostrar</button>
+          </div>
+        </div>
+        <button class="login-submit" type="submit">Entrar al dashboard</button>
+        <p class="login-error" id="loginError" role="alert"></p>
+      </form>
+      <div class="login-footnote">Acceso al panel de seguimiento energético</div>
+    </div>
+  </div>
+
+  <div class="top-banner-container">
+    <img src="Imagen1.png" alt="Logo" class="banner-img">
+  </div>
+
+  <div class="container">
+    <div class="card-panel document-upload-menu" id="documentUploadMenu">
+      <div class="section-title">Carga de documento</div>
+      <div class="document-upload-grid">
+        <div class="document-upload-card">
+          <div class="document-upload-card-title">Excel de electricidad</div>
+          <div class="document-upload-card-description">Selecciona el archivo de electricidad que alimenta el dashboard energético.</div>
+          <label class="btn-file" for="fileInput">Seleccionar Excel de electricidad</label>
+          <span id="menuElectricStatus" class="document-upload-status">Pendiente de cargar</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-title">Seguimiento al KPI Energético</div>
+
+    <div class="kpi-cards-grid">
+      <div class="kpi-card cfe">
+        <div class="kpi-card-title">Consumo CFE Mes</div>
+        <div class="kpi-card-value" id="kpiCfeTotal">-</div>
+        <div class="kpi-card-sub">kWh acumulados</div>
+      </div>
+      <div class="kpi-card solar">
+        <div class="kpi-card-title">Generación Solar Mes</div>
+        <div class="kpi-card-value" id="kpiSolarTotal">-</div>
+        <div class="kpi-card-sub">kWh limpios</div>
+      </div>
+      <div class="kpi-card total">
+        <div class="kpi-card-title">Consumo Total Neto</div>
+        <div class="kpi-card-value" id="kpiConsumoNeto">-</div>
+        <div class="kpi-card-sub">kWh facturables</div>
+      </div>
+      <div class="kpi-card avg">
+        <div class="kpi-card-title">Promedio Diario CFE</div>
+        <div class="kpi-card-value" id="kpiPromedioDiario">-</div>
+        <div class="kpi-card-sub">kWh / día</div>
+      </div>
+      <div class="kpi-card variation">
+        <div class="kpi-card-title">Variación del consumo</div>
+        <div class="kpi-card-value" id="kpiVariacionMensual">-</div>
+        <div class="kpi-card-sub" id="kpiVariacionSub">Respecto al mes anterior</div>
+      </div>
+    </div>
+
+    <div class="upload-section">
+      <div>
+        <label class="btn-file" for="fileInput">Cambiar Excel de electricidad</label>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+        <span id="fileName" style="margin-left:12px;font-size:12px;color:#64748b;font-weight:500;">Modo manual activo</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap;">
+        <div>
+          <label for="selectMes" style="font-size:13px;font-weight:700;margin-right:6px;">Mes:</label>
+          <select id="selectMes" onchange="cambiarMes()">
+            <option value="0">Enero</option><option value="1">Febrero</option>
+            <option value="2">Marzo</option><option value="3">Abril</option>
+            <option value="4">Mayo</option><option value="5">Junio</option>
+            <option value="6">Julio</option><option value="7">Agosto</option>
+            <option value="8" selected>Septiembre</option><option value="9">Octubre</option>
+            <option value="10">Noviembre</option><option value="11">Diciembre</option>
+          </select>
+        </div>
+        <button class="btn-export" onclick="exportarExcel()">Exportar reporte</button>
+      </div>
+    </div>
+
+    <div class="card-panel">
+      <div class="section-title">Seguimiento Diario Detallado</div>
+      <div class="table-container"><table class="excel-table" id="kpiTable"></table></div>
+    </div>
+
+    <div class="card-panel">
+      <div class="section-title">Resultados Finales Anuales &amp; YTD</div>
+      <div class="goal-panel">
+        <div class="goal-heading">
+          <h3>Meta de consumo mensual</h3>
+          <span id="goalCurrentStatus" class="goal-status-badge neutral">Meta sin configurar</span>
+        </div>
+        <p class="goal-description">
+          Define el consumo máximo que se busca alcanzar cada mes. El sistema compara esta meta con el valor de
+          <b>Total Consumido (kWh)</b> de cada mes: verde significa que el consumo está dentro del límite y rojo que lo superó.
+        </p>
+        <div class="goal-form">
+          <div class="goal-input-group">
+            <label for="metaMensualInput">Meta mensual máxima (kWh)</label>
+            <input type="number" id="metaMensualInput" min="0" step="0.01" placeholder="Ej. 25000">
+          </div>
+          <button class="btn-goal" type="button" onclick="guardarMetaMensual()">Guardar meta</button>
+        </div>
+        <div class="goal-help">La meta se conserva en este navegador y se aplica a todos los meses del reporte.</div>
+
+        <div class="goal-stats-grid">
+          <div class="goal-stat">
+            <div class="goal-stat-label">Meta establecida</div>
+            <div class="goal-stat-value" id="goalStatTarget">-</div>
+            <div class="goal-stat-note">kWh por mes</div>
+          </div>
+          <div class="goal-stat">
+            <div class="goal-stat-label">Meses dentro de meta</div>
+            <div class="goal-stat-value" id="goalStatGoodMonths">-</div>
+            <div class="goal-stat-note" id="goalStatMonthsNote">Meses con información</div>
+          </div>
+          <div class="goal-stat">
+            <div class="goal-stat-label">Promedio mensual</div>
+            <div class="goal-stat-value" id="goalStatAverage">-</div>
+            <div class="goal-stat-note">Total consumido promedio</div>
+          </div>
+          <div class="goal-stat">
+            <div class="goal-stat-label">Mes seleccionado</div>
+            <div class="goal-stat-value" id="goalStatSelected">-</div>
+            <div class="goal-stat-note" id="goalStatSelectedNote">Selecciona un mes con datos</div>
+          </div>
+        </div>
+
+        <div class="goal-progress-wrap">
+          <div class="goal-progress-label">
+            <span id="goalProgressCaption">Consumo del mes seleccionado respecto a la meta</span>
+            <span id="goalProgressValue">-</span>
+          </div>
+          <div class="goal-progress-track"><div class="goal-progress-fill" id="goalProgressFill"></div></div>
+        </div>
+      </div>
+
+      <div class="goal-note">
+        La variación mensual compara el Total Consumido con el mes inmediato anterior. La evaluación de la meta se realiza por mes y es provisional cuando el mes todavía no está completo.
+      </div>
+      <div class="table-container"><table class="excel-table table-resumen" id="resumenTable"></table></div>
+    </div>
+
+    <div class="chart-box">
+      <div class="chart-title">Tendencia y Balance Diario de Energía (kWh) — Calendario 2026</div>
+      <div class="chart-subtitle">Haz clic sobre cualquier barra o punto para ver el desglose en ventana modal.</div>
+      <div style="height:320px;position:relative;"><canvas id="dailyChart"></canvas></div>
+    </div>
+
+    <div class="card-panel weekly-panel">
+      <div class="section-title">Desglose de Consumo por Semanas</div>
+      <div class="weekly-grid" id="weeklyGridContainer"></div>
+    </div>
+
+    <div class="card-panel">
+      <div class="section-title">Registros Originales del Día — Hasta SYS</div>
+      <div class="excel-inspector-container">
+        <div class="inspector-controls">
+          <label for="selectDiaInspector" style="font-size:13px;font-weight:700;color:#334155;">Ver datos del día:</label>
+          <select id="selectDiaInspector" onchange="mostrarColumnaExcelDia()">
+            <option value="">-- Ocultar / Sin Seleccionar --</option>
+          </select>
+          <div style="font-size:12px;color:#64748b;">
+            Se muestran solamente los registros originales desde el encabezado hasta el bloque <b>SYS</b>.
+            Las filas posteriores de resumen quedan fuera de este visor.
+          </div>
+        </div>
+        <div class="sys-note">El registro original termina en la última fila consecutiva que contiene <b>SYS</b>.</div>
+        <div class="table-container" style="margin-top:15px;">
+          <table class="excel-table" id="tablaInspeccionDia" style="background:white;"></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalDetalle">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitulo">Desglose del Día</div>
+        <button class="modal-close" onclick="cerrarModal()">✕</button>
+      </div>
+      <table class="modal-body-table">
+        <tr><th>Consumo kWh (CFE):</th><td id="modalValCfe">-</td></tr>
+        <tr><th>Generado kWh (Solar):</th><td id="modalValSolar">-</td></tr>
+        <tr><th>Enviado kWh:</th><td id="modalValEnviado">-</td></tr>
+        <tr style="border-top:2px solid #cbd5e1;background-color:#f8fafc;">
+          <th>Consumo Total Neto (kWh):</th><td id="modalValTotal" style="color:#16a34a;">-</td>
+        </tr>
+      </table>
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="btn-file" style="font-size:12px;padding:6px 18px;" onclick="cerrarModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+
+  <script>
+    // Acceso de demostración: cambia estos datos antes de usar el prototipo.
+    // La validación en HTML/JavaScript no protege información confidencial.
+    const LOGIN_CREDENTIALS = { usuario: "admin", password: "1234" };
+
+    const loginForm = document.getElementById("loginForm");
+    const loginError = document.getElementById("loginError");
+    const loginPasswordInput = document.getElementById("loginPassword");
+    const loginScreen = document.getElementById("loginScreen");
+
+    function desbloquearDashboard() {
+      document.body.classList.remove("login-locked");
+      loginScreen.style.display = "none";
+    }
+
+    if (sessionStorage.getItem("dashboardCFELogin") === "validado") {
+      desbloquearDashboard();
+    }
+
+    document.getElementById("toggleLoginPassword").addEventListener("click", function () {
+      const mostrar = loginPasswordInput.type === "password";
+      loginPasswordInput.type = mostrar ? "text" : "password";
+      this.textContent = mostrar ? "Ocultar" : "Mostrar";
+    });
+
+    loginForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      const usuario = document.getElementById("loginUser").value.trim();
+      const password = loginPasswordInput.value;
+
+      if (usuario === LOGIN_CREDENTIALS.usuario && password === LOGIN_CREDENTIALS.password) {
+        sessionStorage.setItem("dashboardCFELogin", "validado");
+        loginError.textContent = "";
+        desbloquearDashboard();
+      } else {
+        loginError.textContent = "Usuario o contraseña incorrectos.";
+        loginPasswordInput.value = "";
+        loginPasswordInput.focus();
+      }
+    });
+  </script>
+
+  <script>
+    const MESES = [
+      "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ];
+    const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+    const ABREV_MESES = { ene:0, feb:1, mar:2, abr:3, may:4, jun:5, jul:6, ago:7, sep:8, oct:9, nov:10, dic:11 };
+
+    let baseDatosAnual = Array.from({ length: 12 }, () => ({}));
+    let columnasOriginalesExcel = Array.from({ length: 12 }, () => ({}));
+    let filasEtiquetasExcel = Array.from({ length: 12 }, () => []);
+    let limitesSYS = Array.from({ length: 12 }, () => null);
+    let resumenManual = {
+      cfe: new Array(12).fill(null),
+      solar: new Array(12).fill(null),
+      costo: new Array(12).fill(null)
+    };
+    let totalConsumidoExcel = new Array(12).fill(null);
+    let mesSeleccionado = 8;
+    let numDiasMes = 31;
+    let metaMensualKWh = null;
+    let datosKPI = { cfe: [], solar: [], enviado: [], total: [] };
+    let myChart = null;
+
+    /* ========================= CARGA DEL EXCEL ========================= */
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      document.getElementById('fileName').innerText = file.name;
+      const estadoCarga = document.getElementById('menuElectricStatus');
+      if (estadoCarga) {
+        estadoCarga.innerText = file.name;
+        estadoCarga.classList.add('loaded');
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+          procesarLibroCompleto(workbook);
+        } catch (error) {
+          console.error(error);
+          alert('No se pudo analizar el archivo Excel. Verifica que sea un archivo .xlsx, .xls o .csv válido.');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    /* ========================= UTILIDADES ========================= */
+    function limpiarTexto(val) {
+      if (val === undefined || val === null) return '';
+      return String(val).toLowerCase().replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function parseMesDeTexto(texto) {
+      if (!texto) return null;
+      const str = limpiarTexto(texto);
+      const exacto = MESES.findIndex(nombre => limpiarTexto(nombre) === str);
+      if (exacto !== -1) return exacto;
+      for (const [key, val] of Object.entries(ABREV_MESES)) {
+        if (new RegExp('(^|[^a-z])' + key + '([^a-z]|$)', 'i').test(str)) return val;
+      }
+      return null;
+    }
+
+    function parseFecha(celda) {
+      if (celda === undefined || celda === null || celda === '') return null;
+      if (celda instanceof Date && !isNaN(celda.getTime())) {
+        return { dia: celda.getDate(), mes: celda.getMonth() };
+      }
+      if (typeof celda === 'number' && celda >= 30000 && celda <= 70000) {
+        const fechaExcel = new Date(Date.UTC(1899, 11, 30) + celda * 86400000);
+        if (!isNaN(fechaExcel.getTime())) return { dia: fechaExcel.getUTCDate(), mes: fechaExcel.getUTCMonth() };
+      }
+      const str = limpiarTexto(celda);
+      const matchTxt = str.match(/^(\d{1,2})[-/\s]+([a-z]{3})/i);
+      if (matchTxt && ABREV_MESES[matchTxt[2].toLowerCase()] !== undefined) {
+        return { dia: parseInt(matchTxt[1], 10), mes: ABREV_MESES[matchTxt[2].toLowerCase()] };
+      }
+      const matchNum = str.match(/^(\d{1,2})[\/.-](\d{1,2})(?:[\/.-]\d{2,4})?/);
+      if (matchNum) {
+        const dia = parseInt(matchNum[1], 10);
+        const mes = parseInt(matchNum[2], 10) - 1;
+        if (mes >= 0 && mes <= 11 && dia >= 1 && dia <= 31) return { dia, mes };
+      }
+      return null;
+    }
+
+    function parseNumero(val) {
+      if (val === undefined || val === null) return 0;
+      if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
+      let str = String(val).replace(/\u00a0/g, ' ').trim();
+      if (str.includes('#') || str === '-' || str === '') return 0;
+      if (str.startsWith('(') && str.endsWith(')')) str = '-' + str.substring(1, str.length - 1);
+      str = str.replace(/,/g, '').replace(/\s/g, '');
+      const num = parseFloat(str);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    function tieneValorNumerico(celda) {
+      if (celda === undefined || celda === null) return false;
+      const str = limpiarTexto(celda);
+      if (str === '' || str === '-' || str.includes('#')) return false;
+      return !isNaN(Number(String(celda).replace(/,/g, '').trim()));
+    }
+
+    function formatearNumero(valor, decimales = 0) {
+      return Number(valor).toLocaleString('en-US', {
+        minimumFractionDigits: decimales,
+        maximumFractionDigits: decimales
+      });
+    }
+
+    /* ========================= DETECTAR BLOQUE SYS ========================= */
+    function encontrarBloqueSYS(rows) {
+      let filaSYSInicio = -1;
+      let filaSYSEnd = -1;
+      for (let r = 0; r < rows.length; r++) {
+        const fila = rows[r] || [];
+        const tieneSYS = fila.some(celda => limpiarTexto(celda) === 'sys');
+        if (tieneSYS) {
+          if (filaSYSInicio === -1) filaSYSInicio = r;
+          filaSYSEnd = r;
+        } else if (filaSYSInicio !== -1) {
+          break;
+        }
+      }
+      return filaSYSInicio === -1 ? null : { inicio: filaSYSInicio, fin: filaSYSEnd };
+    }
+
+    function buscarFilaPorTexto(rows, textosBuscados) {
+      for (let r = 0; r < rows.length; r++) {
+        const fila = rows[r] || [];
+        for (let c = 0; c < fila.length; c++) {
+          const texto = limpiarTexto(fila[c]);
+          if (textosBuscados.includes(texto)) return r;
+        }
+      }
+      return -1;
+    }
+
+    /* ========================= LEER TABLA RESUMEN DEL EXCEL ========================= */
+    function encontrarDashboardEnergia(rows) {
+      for (let r = 0; r < rows.length; r++) {
+        const fila = rows[r] || [];
+        let colFecha = -1, colCfe = -1, colSolar = -1, colEnviado = -1, colTotal = -1, colDemanda = -1;
+        for (let c = 0; c < fila.length; c++) {
+          const t = limpiarTexto(fila[c]);
+          if (t === 'fecha') colFecha = c;
+          if (t === 'consumo kwh') colCfe = c;
+          if (t === 'generado kwh') colSolar = c;
+          if (t === 'enviado kwh') colEnviado = c;
+          if (t === 'consumo total kwh') colTotal = c;
+          if (t === 'demanda kw') colDemanda = c;
+        }
+        if (colFecha !== -1 && colCfe !== -1 && colSolar !== -1 && colEnviado !== -1) {
+          return { filaEncabezado: r, colFecha, colCfe, colSolar, colEnviado, colTotal, colDemanda };
+        }
+      }
+      return null;
+    }
+
+    function leerTotalConsumidoExcel(rows) {
+      for (let r = 0; r < rows.length; r++) {
+        const fila = rows[r] || [];
+        for (let c = 0; c < fila.length; c++) {
+          if (limpiarTexto(fila[c]) !== 'total consumido') continue;
+          for (let k = c + 1; k < fila.length; k++) {
+            if (tieneValorNumerico(fila[k])) return parseNumero(fila[k]);
+          }
+        }
+      }
+      return null;
+    }
+
+    function leerDashboardEnergia(rows) {
+      const dash = encontrarDashboardEnergia(rows);
+      if (!dash) return 0;
+      let registros = 0;
+      let filasSinFecha = 0;
+      for (let r = dash.filaEncabezado + 1; r < rows.length; r++) {
+        const fila = rows[r] || [];
+        const infoFecha = parseFecha(fila[dash.colFecha]);
+        if (!infoFecha) {
+          const textoFila = limpiarTexto(fila.join(' '));
+          if (textoFila.includes('consumido') || textoFila.startsWith('week ')) break;
+          filasSinFecha++;
+          if (filasSinFecha >= 2) break;
+          continue;
+        }
+        filasSinFecha = 0;
+        const { dia, mes } = infoFecha;
+        if (mes < 0 || mes > 11 || dia < 1 || dia > 31) continue;
+        if (!baseDatosAnual[mes][dia]) baseDatosAnual[mes][dia] = { cfe:0, solar:0, enviado:0, demanda:0 };
+        if (tieneValorNumerico(fila[dash.colCfe])) baseDatosAnual[mes][dia].cfe = parseNumero(fila[dash.colCfe]);
+        if (tieneValorNumerico(fila[dash.colSolar])) baseDatosAnual[mes][dia].solar = parseNumero(fila[dash.colSolar]);
+        if (tieneValorNumerico(fila[dash.colEnviado])) baseDatosAnual[mes][dia].enviado = Math.abs(parseNumero(fila[dash.colEnviado]));
+        if (dash.colDemanda !== -1 && tieneValorNumerico(fila[dash.colDemanda])) baseDatosAnual[mes][dia].demanda = parseNumero(fila[dash.colDemanda]);
+        registros++;
+      }
+      return registros;
+    }
+
+    /* ========================= PROCESAMIENTO DEL LIBRO ========================= */
+    function procesarLibroCompleto(workbook) {
+      baseDatosAnual = Array.from({ length: 12 }, () => ({}));
+      columnasOriginalesExcel = Array.from({ length: 12 }, () => ({}));
+      filasEtiquetasExcel = Array.from({ length: 12 }, () => []);
+      limitesSYS = Array.from({ length: 12 }, () => null);
+      totalConsumidoExcel = new Array(12).fill(null);
+
+      workbook.SheetNames.forEach(sheetName => {
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header:1, raw:true, defval:'' });
+        if (!rows || !rows.length) return;
+
+        const mesHoja = parseMesDeTexto(sheetName);
+        if (mesHoja === null) return;
+        const mesHojaExacto = MESES.findIndex(nombre => limpiarTexto(nombre) === limpiarTexto(sheetName));
+        if (mesHojaExacto !== -1) {
+          const totalMesExcel = leerTotalConsumidoExcel(rows);
+          if (totalMesExcel !== null) totalConsumidoExcel[mesHojaExacto] = totalMesExcel;
+        }
+
+        const bloqueSYS = encontrarBloqueSYS(rows);
+        if (bloqueSYS) {
+          limitesSYS[mesHoja] = bloqueSYS;
+          let filaFechas = -1;
+          let esHeaderNumerico = false;
+          for (let i = 0; i < Math.min(25, rows.length); i++) {
+            const fila = rows[i] || [];
+            let coincidenciaFechas = 0;
+            let coincidenciaNumerica = 0;
+            fila.forEach(celda => {
+              if (parseFecha(celda)) coincidenciaFechas++;
+              const num = parseInt(limpiarTexto(celda), 10);
+              if (!isNaN(num) && num >= 1 && num <= 31) coincidenciaNumerica++;
+            });
+            if (coincidenciaFechas >= 2) { filaFechas = i; break; }
+            if (coincidenciaNumerica >= 5) { filaFechas = i; esHeaderNumerico = true; break; }
+          }
+
+          if (filaFechas !== -1) {
+            let colItem = 1, colDesc = 2, colUni = 3;
+            for (let r = 0; r < Math.min(10, rows.length); r++) {
+              const fila = rows[r] || [];
+              const rowStr = limpiarTexto(fila.join(' '));
+              if (rowStr.includes('item') && rowStr.includes('descripcion')) {
+                for (let c = 0; c < fila.length; c++) {
+                  const t = limpiarTexto(fila[c]);
+                  if (t === 'item') colItem = c;
+                  if (t === 'descripcion' || t === 'descripción') colDesc = c;
+                  if (t === 'unidades' || t === 'unidad') colUni = c;
+                }
+                break;
+              }
+            }
+
+            const etiquetasRows = [];
+            for (let r = 0; r <= bloqueSYS.fin; r++) {
+              const fila = rows[r] || [];
+              etiquetasRows[r] = {
+                item: fila[colItem] !== undefined ? fila[colItem] : '',
+                desc: fila[colDesc] !== undefined ? fila[colDesc] : '',
+                uni: fila[colUni] !== undefined ? fila[colUni] : ''
+              };
+            }
+            filasEtiquetasExcel[mesHoja] = etiquetasRows;
+
+            const filaCFE = buscarFilaPorTexto(rows, ['consumo total']);
+            const filaEnviado = buscarFilaPorTexto(rows, ['enviados total']);
+            const filaDemanda = buscarFilaPorTexto(rows, ['demanda total']);
+            const filaGenerado = buscarFilaPorTexto(rows, ['generado kwh', 'generado']);
+            const fFechas = rows[filaFechas] || [];
+            const fCFE = filaCFE !== -1 ? rows[filaCFE] : [];
+            const fEnviado = filaEnviado !== -1 ? rows[filaEnviado] : [];
+            const fDemanda = filaDemanda !== -1 ? rows[filaDemanda] : [];
+            const fGenerado = filaGenerado !== -1 ? rows[filaGenerado] : [];
+
+            for (let col = 0; col < fFechas.length; col++) {
+              let dia = null;
+              let mes = mesHoja;
+              if (esHeaderNumerico) {
+                const num = parseInt(limpiarTexto(fFechas[col]), 10);
+                if (!isNaN(num) && num >= 1 && num <= 31) dia = num;
+              } else {
+                const info = parseFecha(fFechas[col]);
+                if (info) { dia = info.dia; mes = info.mes; }
+              }
+              if (dia === null || mes < 0 || mes > 11) continue;
+
+              const valoresColumna = {};
+              for (let r = 0; r <= bloqueSYS.fin; r++) {
+                if (rows[r] && rows[r][col] !== undefined) valoresColumna[r] = rows[r][col];
+              }
+              columnasOriginalesExcel[mes][dia] = valoresColumna;
+
+              const cfeVal = parseNumero(fCFE[col]);
+              const envVal = Math.abs(parseNumero(fEnviado[col]));
+              const demandaVal = parseNumero(fDemanda[col]);
+              const solarVal = parseNumero(fGenerado[col]);
+              if (!baseDatosAnual[mes][dia]) baseDatosAnual[mes][dia] = { cfe:cfeVal, solar:solarVal, enviado:envVal, demanda:demandaVal };
+              else {
+                if (cfeVal !== 0) baseDatosAnual[mes][dia].cfe = cfeVal;
+                if (solarVal !== 0) baseDatosAnual[mes][dia].solar = solarVal;
+                if (envVal !== 0) baseDatosAnual[mes][dia].enviado = envVal;
+                if (demandaVal !== 0) baseDatosAnual[mes][dia].demanda = demandaVal;
+              }
+            }
+          }
+        }
+        leerDashboardEnergia(rows);
+      });
+
+      let maxDias = -1;
+      let mesMasDatos = 8;
+      for (let m = 0; m < 12; m++) {
+        const cant = Object.keys(baseDatosAnual[m]).length;
+        if (cant > maxDias && cant > 0) { maxDias = cant; mesMasDatos = m; }
+      }
+      document.getElementById('selectMes').value = mesMasDatos;
+      mesSeleccionado = mesMasDatos;
+      renderizarMesSeleccionado();
+    }
+
+    /* ========================= CAMBIAR Y MOSTRAR MES ========================= */
+    function cambiarMes() {
+      mesSeleccionado = parseInt(document.getElementById('selectMes').value, 10);
+      renderizarMesSeleccionado();
+    }
+
+    function renderizarMesSeleccionado() {
+      numDiasMes = new Date(2026, mesSeleccionado + 1, 0).getDate();
+      datosKPI.cfe = new Array(numDiasMes).fill(0);
+      datosKPI.solar = new Array(numDiasMes).fill(0);
+      datosKPI.enviado = new Array(numDiasMes).fill(0);
+      datosKPI.total = new Array(numDiasMes).fill(0);
+      const datosMes = baseDatosAnual[mesSeleccionado] || {};
+
+      for (let d = 1; d <= numDiasMes; d++) {
+        if (datosMes[d]) {
+          datosKPI.cfe[d - 1] = datosMes[d].cfe || 0;
+          datosKPI.solar[d - 1] = datosMes[d].solar || 0;
+          datosKPI.enviado[d - 1] = Math.abs(datosMes[d].enviado || 0);
+        }
+      }
+
+      actualizarSelectorDiasInspector();
+      calcularTotales();
+      actualizarTarjetasKPI();
+      actualizarConsumoSemanal();
+      construirTablaHTML();
+      construirTablaResumenHTML();
+      renderizarGrafica();
+      actualizarPanelMeta();
+    }
+
+    /* ========================= TOTALES DIARIOS ========================= */
+    function calcularTotales() {
+      for (let i = 0; i < numDiasMes; i++) {
+        const consumoCFE = Number(datosKPI.cfe[i]) || 0;
+        const generadoKWh = Number(datosKPI.solar[i]) || 0;
+        const enviadoKWh = Math.abs(Number(datosKPI.enviado[i]) || 0);
+        datosKPI.enviado[i] = enviadoKWh;
+        datosKPI.total[i] = consumoCFE + generadoKWh + enviadoKWh;
+      }
+    }
+
+    /* ========================= SELECTOR Y VISOR ORIGINAL ========================= */
+    function actualizarSelectorDiasInspector() {
+      const select = document.getElementById('selectDiaInspector');
+      select.innerHTML = '<option value="">-- Ocultar / Sin Seleccionar --</option>';
+      for (let i = 1; i <= numDiasMes; i++) {
+        const nombreDiaSemana = DIAS_SEMANA[new Date(2026, mesSeleccionado, i).getDay()];
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `Día ${i} (${nombreDiaSemana})`;
+        select.appendChild(opt);
+      }
+      mostrarColumnaExcelDia();
+    }
+
+    function mostrarColumnaExcelDia() {
+      const valSel = document.getElementById('selectDiaInspector').value;
+      const tabla = document.getElementById('tablaInspeccionDia');
+      if (valSel === '') {
+        tabla.innerHTML = `<tr><td colspan="4" style="padding:35px;text-align:center;color:#64748b;font-size:14px;background:#f8fafc;border:1px dashed #cbd5e1;">
+          <b>Ningún día seleccionado.</b><br><br>Selecciona un día para mostrar únicamente los registros originales desde el encabezado hasta SYS.
+        </td></tr>`;
+        return;
+      }
+
+      const diaSel = parseInt(valSel, 10);
+      const colData = columnasOriginalesExcel[mesSeleccionado][diaSel] || {};
+      const etiquetas = filasEtiquetasExcel[mesSeleccionado] || [];
+      const limiteSYS = limitesSYS[mesSeleccionado];
+      if (!limiteSYS || Object.keys(colData).length === 0) {
+        tabla.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:#64748b;">No hay datos originales cargados para este día.</td></tr>';
+        return;
+      }
+
+      let html = `<thead><tr>
+        <th style="text-align:center;width:60px;">Item</th>
+        <th style="text-align:left;padding-left:15px;min-width:250px;">Descripción</th>
+        <th style="text-align:center;width:80px;">Unidades</th>
+        <th style="text-align:center;background-color:#d1fae5;color:#065f46;font-size:12px;font-weight:800;min-width:120px;">Valor Día ${diaSel}</th>
+      </tr></thead><tbody>`;
+
+      for (let r = 0; r <= limiteSYS.fin; r++) {
+        const et = etiquetas[r] || { item:'', desc:'', uni:'' };
+        const val = colData[r] !== undefined ? colData[r] : '';
+        if (et.item === '' && et.desc === '' && et.uni === '' && val === '') continue;
+        const esSYS = limpiarTexto(et.item) === 'sys' || limpiarTexto(val) === 'sys';
+        html += `<tr ${esSYS ? 'style="background:#ecfdf5;"' : ''}>
+          <td style="text-align:center;font-weight:700;color:#475569;background:#fff;">${et.item}</td>
+          <td style="text-align:left;padding-left:15px;font-weight:600;background:#f8fafc;color:#334155;">${et.desc}</td>
+          <td style="text-align:center;color:#64748b;background:#fff;">${et.uni}</td>
+          <td style="font-weight:800;color:#0f172a;background:#fff;">${val !== null ? val : ''}</td>
+        </tr>`;
+      }
+      tabla.innerHTML = html + '</tbody>';
+    }
+
+    /* ========================= TARJETAS KPI ========================= */
+    function actualizarTarjetasKPI() {
+      const sumCFE = datosKPI.cfe.reduce((a,b) => a + b, 0);
+      const sumSolar = datosKPI.solar.reduce((a,b) => a + b, 0);
+      const sumTotal = datosKPI.total.reduce((a,b) => a + b, 0);
+      const diasDatos = datosKPI.cfe.filter(v => v !== 0).length || 1;
+      document.getElementById('kpiCfeTotal').innerText = sumCFE !== 0 ? Math.round(sumCFE).toLocaleString('en-US') : '-';
+      document.getElementById('kpiSolarTotal').innerText = sumSolar !== 0 ? Math.round(sumSolar).toLocaleString('en-US') : '-';
+      document.getElementById('kpiConsumoNeto').innerText = sumTotal !== 0 ? Math.round(sumTotal).toLocaleString('en-US') : '-';
+      document.getElementById('kpiPromedioDiario').innerText = sumCFE !== 0 ? Math.round(sumCFE / diasDatos).toLocaleString('en-US') : '-';
+    }
+
+    /* ========================= DESGLOSE SEMANAL ========================= */
+    function actualizarConsumoSemanal() {
+      const container = document.getElementById('weeklyGridContainer');
+      container.innerHTML = '';
+      const abrev = MESES[mesSeleccionado].substring(0, 3);
+      for (let s = 0; s < Math.ceil(numDiasMes / 7); s++) {
+        const ini = s * 7 + 1;
+        const fin = Math.min((s + 1) * 7, numDiasMes);
+        let c = 0, sol = 0, net = 0;
+        for (let d = ini; d <= fin; d++) {
+          c += datosKPI.cfe[d - 1];
+          sol += datosKPI.solar[d - 1];
+          net += datosKPI.total[d - 1];
+        }
+        const card = document.createElement('div');
+        card.className = 'week-card';
+        card.innerHTML = `<div class="week-title">Semana ${s + 1} (${ini} - ${fin} ${abrev})</div>
+          <div class="week-row"><span>CFE:</span><span>${c !== 0 ? Math.round(c).toLocaleString('en-US') : '-'}</span></div>
+          <div class="week-row"><span>Solar:</span><span>${sol !== 0 ? Math.round(sol).toLocaleString('en-US') : '-'}</span></div>
+          <div class="week-row"><span>Neto:</span><span style="color:#16a34a;">${net !== 0 ? Math.round(net).toLocaleString('en-US') : '-'}</span></div>`;
+        container.appendChild(card);
+      }
+    }
+
+    /* ========================= TABLA DIARIA ========================= */
+    function construirTablaHTML() {
+      let diasH = '', cfeC = '', solC = '', envC = '', totC = '';
+      for (let i = 1; i <= numDiasMes; i++) diasH += `<th style="min-width:68px;width:68px;">${i}</th>`;
+      for (let i = 0; i < numDiasMes; i++) {
+        const c = datosKPI.cfe[i], s = datosKPI.solar[i], e = datosKPI.enviado[i], t = datosKPI.total[i];
+        cfeC += `<td class="${c !== 0 ? 'cell-green' : ''}"><input class="kpi-input" value="${c !== 0 ? c.toLocaleString('en-US') : ''}" placeholder="-" onchange="actKPI('cfe',${i},this.value)"></td>`;
+        solC += `<td class="${s !== 0 ? 'cell-green' : ''}"><input class="kpi-input" value="${s !== 0 ? s.toLocaleString('en-US') : ''}" placeholder="-" onchange="actKPI('solar',${i},this.value)"></td>`;
+        envC += `<td class="${e !== 0 ? 'cell-green' : ''}"><input class="kpi-input" value="${e !== 0 ? e.toLocaleString('en-US') : ''}" placeholder="-" onchange="actKPI('enviado',${i},this.value)"></td>`;
+        totC += `<td class="${t !== 0 ? 'cell-green' : ''}">${t !== 0 ? t.toLocaleString('en-US') : '-'}</td>`;
+      }
+      document.getElementById('kpiTable').innerHTML = `<thead>
+        <tr><th class="col-kpi" rowspan="2">KPI</th><th rowspan="2">Target</th><th colspan="${numDiasMes}">Día del Mes</th></tr>
+        <tr>${diasH}</tr></thead><tbody>
+        <tr><td class="col-kpi">Consumo kWh (CFE)</td><td></td>${cfeC}</tr>
+        <tr><td class="col-kpi">Generado kWh (Solar)</td><td></td>${solC}</tr>
+        <tr><td class="col-kpi">Enviado kWh</td><td></td>${envC}</tr>
+        <tr class="cell-total-row"><td class="col-kpi">Consumo Total (kWh)</td><td></td>${totC}</tr>
+      </tbody>`;
+    }
+
+    /* ========================= EDICIÓN MANUAL ========================= */
+    function actKPI(tipo, i, val) {
+      const v = tipo === 'enviado' ? Math.abs(parseNumero(val)) : parseNumero(val);
+      const dia = i + 1;
+      datosKPI[tipo][i] = v;
+      if (tipo === 'cfe' || tipo === 'enviado') totalConsumidoExcel[mesSeleccionado] = null;
+      if (!baseDatosAnual[mesSeleccionado][dia]) baseDatosAnual[mesSeleccionado][dia] = { cfe:0, solar:0, enviado:0, demanda:0 };
+      baseDatosAnual[mesSeleccionado][dia][tipo] = v;
+      calcularTotales();
+      actualizarTarjetasKPI();
+      actualizarConsumoSemanal();
+      construirTablaHTML();
+      construirTablaResumenHTML();
+      renderizarGrafica();
+      actualizarPanelMeta();
+    }
+
+    /* ========================= RESUMEN MENSUAL ========================= */
+    function calcularSumaMes(m, campo) {
+      if (resumenManual[campo] && resumenManual[campo][m] !== null) return Math.max(0, resumenManual[campo][m]);
+      const dm = baseDatosAnual[m] || {};
+      let sum = 0, tiene = false;
+      for (let d = 1; d <= 31; d++) {
+        if (dm[d] && dm[d][campo] !== undefined && dm[d][campo] !== 0) {
+          sum += dm[d][campo];
+          tiene = true;
+        }
+      }
+      return tiene ? sum : 0;
+    }
+
+    function calcularTotalConsumidoMes(m) {
+      const totalOficial = totalConsumidoExcel[m];
+      if (totalOficial !== null && Number.isFinite(totalOficial)) return Math.max(0, totalOficial);
+      return Math.max(0, calcularSumaMes(m, 'cfe') - calcularSumaMes(m, 'enviado'));
+    }
+
+    function calcularVariacionMensual(m) {
+      if (m <= 0) return null;
+      const mesActual = calcularTotalConsumidoMes(m);
+      const mesAnterior = calcularTotalConsumidoMes(m - 1);
+      if (mesActual <= 0 || mesAnterior <= 0) return null;
+      return ((mesActual - mesAnterior) / mesAnterior) * 100;
+    }
+
+    function actualizarTarjetaVariacionMensual() {
+      const valor = document.getElementById('kpiVariacionMensual');
+      const subtitulo = document.getElementById('kpiVariacionSub');
+      if (!valor || !subtitulo) return;
+      const variacion = calcularVariacionMensual(mesSeleccionado);
+      if (variacion === null) {
+        valor.textContent = '-';
+        valor.style.color = '#0f172a';
+        subtitulo.textContent = mesSeleccionado === 0 ? 'No hay un mes anterior para comparar' : 'Faltan datos de uno de los dos meses';
+        return;
+      }
+      valor.textContent = (variacion > 0 ? '+' : '') + variacion.toFixed(1) + '%';
+      if (variacion > 0) {
+        valor.style.color = '#b91c1c';
+        subtitulo.textContent = 'Aumentó frente a ' + MESES[mesSeleccionado - 1];
+      } else if (variacion < 0) {
+        valor.style.color = '#047857';
+        subtitulo.textContent = 'Disminuyó frente a ' + MESES[mesSeleccionado - 1];
+      } else {
+        valor.style.color = '#475569';
+        subtitulo.textContent = 'Sin cambio frente a ' + MESES[mesSeleccionado - 1];
+      }
+    }
+
+    /* ========================= META DE CONSUMO ========================= */
+    function cargarMetaGuardada() {
+      try {
+        const guardada = localStorage.getItem('metaMensualKWh');
+        if (guardada !== null && guardada !== '') {
+          const valor = Number(guardada);
+          if (Number.isFinite(valor) && valor > 0) metaMensualKWh = valor;
+        }
+      } catch (error) {
+        console.warn('No fue posible leer la meta guardada en este navegador.', error);
+      }
+      const input = document.getElementById('metaMensualInput');
+      if (input && metaMensualKWh !== null) input.value = metaMensualKWh;
+    }
+
+    function guardarMetaMensual() {
+      const input = document.getElementById('metaMensualInput');
+      const valor = Number(input.value);
+      if (!input.value.trim() || !Number.isFinite(valor) || valor <= 0) {
+        alert('Ingresa una meta mensual mayor que cero kWh.');
+        input.focus();
+        return;
+      }
+      metaMensualKWh = valor;
+      try { localStorage.setItem('metaMensualKWh', String(valor)); }
+      catch (error) { console.warn('No fue posible guardar la meta en el navegador.', error); }
+      actualizarPanelMeta();
+      construirTablaResumenHTML();
+    }
+
+    function obtenerMesesEvaluados() {
+      const meses = [];
+      for (let m = 0; m < 12; m++) {
+        const total = calcularTotalConsumidoMes(m);
+        if (total > 0) meses.push({ mes:m, total });
+      }
+      return meses;
+    }
+
+    function obtenerEstadoMeta(total) {
+      if (metaMensualKWh === null || total <= 0) return 'sin-datos';
+      return total <= metaMensualKWh ? 'dentro' : 'superada';
+    }
+
+    function actualizarPanelMeta() {
+      const meses = obtenerMesesEvaluados();
+      const metaActiva = metaMensualKWh !== null && metaMensualKWh > 0;
+      const totalMesSeleccionado = calcularTotalConsumidoMes(mesSeleccionado);
+      const estadoMes = obtenerEstadoMeta(totalMesSeleccionado);
+
+      document.getElementById('goalStatTarget').textContent = metaActiva ? formatearNumero(metaMensualKWh) : '-';
+      document.getElementById('goalStatMonthsNote').textContent = `${meses.length} mes(es) con datos`;
+
+      if (metaActiva) {
+        const dentro = meses.filter(item => item.total <= metaMensualKWh).length;
+        document.getElementById('goalStatGoodMonths').textContent = `${dentro} / ${meses.length}`;
+        const promedio = meses.length ? meses.reduce((acc, item) => acc + item.total, 0) / meses.length : 0;
+        document.getElementById('goalStatAverage').textContent = promedio > 0 ? formatearNumero(promedio) : '-';
+      } else {
+        document.getElementById('goalStatGoodMonths').textContent = '-';
+        document.getElementById('goalStatAverage').textContent = meses.length ? formatearNumero(meses.reduce((acc, item) => acc + item.total, 0) / meses.length) : '-';
+      }
+
+      const badge = document.getElementById('goalCurrentStatus');
+      const selected = document.getElementById('goalStatSelected');
+      const selectedNote = document.getElementById('goalStatSelectedNote');
+      const progressValue = document.getElementById('goalProgressValue');
+      const progressCaption = document.getElementById('goalProgressCaption');
+      const progressFill = document.getElementById('goalProgressFill');
+
+      if (!metaActiva) {
+        badge.className = 'goal-status-badge neutral';
+        badge.textContent = 'Meta sin configurar';
+        selected.textContent = totalMesSeleccionado > 0 ? formatearNumero(totalMesSeleccionado) : '-';
+        selectedNote.textContent = totalMesSeleccionado > 0 ? 'kWh consumidos este mes' : 'No hay consumo registrado';
+        progressCaption.textContent = 'Configura una meta para ver el avance del mes seleccionado';
+        progressValue.textContent = '-';
+        progressFill.style.width = '0%';
+        progressFill.classList.remove('over');
+      } else if (totalMesSeleccionado <= 0) {
+        badge.className = 'goal-status-badge neutral';
+        badge.textContent = 'Sin datos del mes';
+        selected.textContent = '-';
+        selectedNote.textContent = 'No hay Total Consumido registrado';
+        progressCaption.textContent = 'Consumo del mes seleccionado respecto a la meta';
+        progressValue.textContent = 'Sin datos';
+        progressFill.style.width = '0%';
+        progressFill.classList.remove('over');
+      } else {
+        const porcentaje = (totalMesSeleccionado / metaMensualKWh) * 100;
+        const diferencia = metaMensualKWh - totalMesSeleccionado;
+        selected.textContent = `${porcentaje.toFixed(1)}%`;
+        selectedNote.textContent = diferencia >= 0
+          ? `${formatearNumero(diferencia)} kWh disponibles antes de la meta`
+          : `${formatearNumero(Math.abs(diferencia))} kWh por encima de la meta`;
+        progressCaption.textContent = `${MESES[mesSeleccionado]}: ${formatearNumero(totalMesSeleccionado)} de ${formatearNumero(metaMensualKWh)} kWh`;
+        progressValue.textContent = `${porcentaje.toFixed(1)}%`;
+        progressFill.style.width = `${Math.min(porcentaje, 100)}%`;
+        progressFill.classList.toggle('over', estadoMes === 'superada');
+        badge.className = `goal-status-badge ${estadoMes === 'dentro' ? 'good' : 'bad'}`;
+        badge.textContent = estadoMes === 'dentro' ? 'Dentro de la meta' : 'Meta superada';
+      }
+    }
+
+    /* ========================= TABLA ANUAL YTD ========================= */
+    function construirTablaResumenHTML() {
+      const abrevs = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      const cv = [], sv = [], tv = [], cov = [];
+      for (let m = 0; m < 12; m++) {
+        cv.push(calcularSumaMes(m, 'cfe'));
+        sv.push(calcularSumaMes(m, 'solar'));
+        tv.push(calcularTotalConsumidoMes(m));
+        cov.push(resumenManual.costo[m] || 0);
+      }
+      const promedio = arr => {
+        const datos = arr.filter(v => v !== 0);
+        return datos.length ? datos.reduce((a,b) => a + b, 0) / datos.length : 0;
+      };
+      const cy = promedio(cv), sy = promedio(sv), ty = promedio(tv), coy = promedio(cov);
+      const variaciones = tv.map((valor, m) => m === 0 || valor <= 0 || tv[m - 1] <= 0 ? null : ((valor - tv[m - 1]) / tv[m - 1]) * 100);
+
+      let html = `<thead><tr><th class="col-kpi">Mes</th>`;
+      abrevs.forEach((a, i) => {
+        html += `<th ${i === mesSeleccionado ? 'style="background:#cbd5e1;font-weight:bold;"' : ''}>${a}</th>`;
+      });
+      html += '<th>YTD</th></tr></thead><tbody>';
+
+      let rowCFE = '<tr><td class="col-kpi">CFE Energy (kWh)</td>';
+      let rowSol = '<tr><td class="col-kpi">Solar Energy (kWh)</td>';
+      let rowTotal = '<tr class="cell-total-row"><td class="col-kpi">Total Consumido (kWh)</td>';
+      let rowMeta = '<tr><td class="col-kpi">Meta mensual (kWh)</td>';
+      let rowPorcentaje = '<tr><td class="col-kpi">Uso de la meta (%)</td>';
+      let rowEstado = '<tr><td class="col-kpi">Estado de la meta</td>';
+      let rowVariacion = '<tr><td class="col-kpi">Variación mensual (%)</td>';
+      let rowCos = '<tr><td class="col-kpi">Costo del kWh</td>';
+
+      for (let m = 0; m < 12; m++) {
+        rowCFE += `<td><input type="text" class="kpi-input" value="${cv[m] !== 0 ? Math.round(cv[m]).toLocaleString('en-US') : ''}" placeholder="-" onchange="editarResumen('cfe',${m},this.value)"></td>`;
+        rowSol += `<td><input type="text" class="kpi-input" value="${sv[m] !== 0 ? Math.round(sv[m]).toLocaleString('en-US') : ''}" placeholder="-" onchange="editarResumen('solar',${m},this.value)"></td>`;
+        rowTotal += `<td><input type="text" class="kpi-input" value="${tv[m] !== 0 ? Math.round(tv[m]).toLocaleString('en-US') : ''}" placeholder="-" readonly title="Total consumido mensual"></td>`;
+
+        if (metaMensualKWh !== null) {
+          rowMeta += `<td class="goal-table-neutral">${formatearNumero(metaMensualKWh)}</td>`;
+          if (tv[m] > 0) {
+            const porcentaje = (tv[m] / metaMensualKWh) * 100;
+            const clase = tv[m] <= metaMensualKWh ? 'goal-table-good' : 'goal-table-bad';
+            rowPorcentaje += `<td class="${clase}">${porcentaje.toFixed(1)}%</td>`;
+            rowEstado += `<td class="${clase}">${tv[m] <= metaMensualKWh ? 'Dentro' : 'Superada'}</td>`;
+          } else {
+            rowPorcentaje += '<td class="goal-table-neutral">-</td>';
+            rowEstado += '<td class="goal-table-neutral">Sin datos</td>';
+          }
+        } else {
+          rowMeta += '<td class="goal-table-neutral">-</td>';
+          rowPorcentaje += '<td class="goal-table-neutral">-</td>';
+          rowEstado += '<td class="goal-table-neutral">Sin meta</td>';
+        }
+
+        const variacionMes = variaciones[m];
+        const colorVariacion = variacionMes === null ? '#64748b' : variacionMes > 0 ? '#b91c1c' : variacionMes < 0 ? '#047857' : '#475569';
+        const textoVariacion = variacionMes === null ? '-' : (variacionMes > 0 ? '+' : '') + variacionMes.toFixed(1) + '%';
+        rowVariacion += `<td style="font-weight:700;color:${colorVariacion};background:#f8fafc;">${textoVariacion}</td>`;
+        rowCos += `<td>$ <input type="text" class="kpi-input" style="width:70%;" value="${cov[m] !== 0 ? cov[m].toFixed(2) : ''}" placeholder="0.00" onchange="editarResumen('costo',${m},this.value)"></td>`;
+      }
+
+      const mesesEvaluados = tv.filter(v => v > 0).length;
+      const mesesDentro = metaMensualKWh === null ? 0 : tv.filter(v => v > 0 && v <= metaMensualKWh).length;
+      const promedioUso = metaMensualKWh !== null && ty > 0 ? `${(ty / metaMensualKWh * 100).toFixed(1)}%` : '-';
+      const resumenEstado = metaMensualKWh === null ? '-' : `${mesesDentro}/${mesesEvaluados} meses`;
+
+      html += rowCFE + `<td style="font-weight:800;background:#f1f5f9;">${cy !== 0 ? Math.round(cy).toLocaleString() : '-'}</td></tr>`;
+      html += rowSol + `<td style="font-weight:800;background:#f1f5f9;">${sy !== 0 ? Math.round(sy).toLocaleString() : '-'}</td></tr>`;
+      html += rowTotal + `<td style="font-weight:800;background:#f1f5f9;">${ty !== 0 ? Math.round(ty).toLocaleString() : '-'}</td></tr>`;
+      html += rowMeta + `<td style="font-weight:800;background:#f1f5f9;">${metaMensualKWh !== null ? formatearNumero(metaMensualKWh) : '-'}</td></tr>`;
+      html += rowPorcentaje + `<td style="font-weight:800;background:#f1f5f9;">${promedioUso}</td></tr>`;
+      html += rowEstado + `<td style="font-weight:800;background:#f1f5f9;">${resumenEstado}</td></tr>`;
+      html += rowVariacion + '<td style="font-weight:700;color:#64748b;background:#f1f5f9;">-</td></tr>';
+      html += rowCos + `<td style="font-weight:800;background:#f1f5f9;">${coy !== 0 ? '$ ' + coy.toFixed(2) : '-'}</td></tr>`;
+      document.getElementById('resumenTable').innerHTML = html + '</tbody>';
+      actualizarTarjetaVariacionMensual();
+      actualizarPanelMeta();
+    }
+
+    function editarResumen(campo, mes, valor) {
+      resumenManual[campo][mes] = parseNumero(valor);
+      if (campo === 'cfe') totalConsumidoExcel[mes] = null;
+      construirTablaResumenHTML();
+      if (mes === mesSeleccionado) {
+        renderizarMesSeleccionado();
+      } else {
+        actualizarPanelMeta();
+      }
+    }
+
+    /* ========================= GRÁFICA ========================= */
+    function renderizarGrafica() {
+      const ctx = document.getElementById('dailyChart').getContext('2d');
+      const labels = [];
+      for (let i = 1; i <= numDiasMes; i++) {
+        labels.push([i, DIAS_SEMANA[new Date(2026, mesSeleccionado, i).getDay()]]);
+      }
+      const valoresTopeGrafica = datosKPI.total.map(v => Number(v) || 0);
+      if (myChart) myChart.destroy();
+      myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label:'Consumo kWh (CFE)', data:datosKPI.cfe, backgroundColor:'#3b82f6', borderRadius:3, stack:'S0' },
+            { label:'Generado kWh (Solar)', data:datosKPI.solar, backgroundColor:'#10b981', borderRadius:3, stack:'S0' },
+            { label:'Enviado kWh', data:datosKPI.enviado, backgroundColor:'#f59e0b', borderRadius:3, stack:'S0' },
+            { label:'Total Consumido (kWh)', data:valoresTopeGrafica, type:'line', borderColor:'#0f172a', borderWidth:2, tension:0, pointRadius:3, pointHoverRadius:5, order:-1 }
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          onClick:(e, els) => { if (els.length > 0) abrirModalDia(els[0].index + 1); },
+          plugins:{ legend:{ position:'top' } },
+          scales:{ x:{ stacked:true }, y:{ stacked:true, min:0 } }
+        }
+      });
+    }
+
+    /* ========================= MODAL ========================= */
+    function abrirModalDia(dia) {
+      const i = dia - 1;
+      const c = datosKPI.cfe[i], s = datosKPI.solar[i], e = Math.abs(datosKPI.enviado[i] || 0), t = datosKPI.total[i];
+      document.getElementById('modalTitulo').innerText = `Día ${dia} de ${MESES[mesSeleccionado]}`;
+      document.getElementById('modalValCfe').innerText = c !== 0 ? c.toLocaleString('en-US') + ' kWh' : '-';
+      document.getElementById('modalValSolar').innerText = s !== 0 ? s.toLocaleString('en-US') + ' kWh' : '-';
+      document.getElementById('modalValEnviado').innerText = e !== 0 ? e.toLocaleString('en-US') + ' kWh' : '-';
+      document.getElementById('modalValTotal').innerText = t !== 0 ? t.toLocaleString('en-US') + ' kWh' : '-';
+      document.getElementById('modalDetalle').style.display = 'flex';
+    }
+    function cerrarModal() { document.getElementById('modalDetalle').style.display = 'none'; }
+    document.getElementById('modalDetalle').addEventListener('click', function(e) {
+      if (e.target === this) cerrarModal();
+    });
+
+    /* ========================= EXPORTAR REPORTE ========================= */
+    function exportarExcel() {
+      if (typeof XLSX === 'undefined') {
+        alert('No se pudo cargar la herramienta para exportar Excel.');
+        return;
+      }
+      const filas = [['Mes','CFE Energy (kWh)','Solar Energy (kWh)','Total Consumido (kWh)','Meta mensual (kWh)','Uso de la meta (%)','Estado de la meta','Variación mensual (%)','Costo del kWh']];
+      for (let m = 0; m < 12; m++) {
+        const total = calcularTotalConsumidoMes(m);
+        const variacion = calcularVariacionMensual(m);
+        const uso = metaMensualKWh !== null && total > 0 ? (total / metaMensualKWh) * 100 : null;
+        const estado = metaMensualKWh === null ? 'Sin meta' : total <= 0 ? 'Sin datos' : total <= metaMensualKWh ? 'Dentro' : 'Superada';
+        filas.push([
+          MESES[m], calcularSumaMes(m,'cfe'), calcularSumaMes(m,'solar'), total,
+          metaMensualKWh, uso, estado, variacion, resumenManual.costo[m] || 0
+        ]);
+      }
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(filas);
+      XLSX.utils.book_append_sheet(wb, ws, 'Resumen KPI');
+      XLSX.writeFile(wb, 'Reporte_KPI_Energetico.xlsx');
+    }
+
+    /* ========================= INICIO ========================= */
+    cargarMetaGuardada();
+    renderizarMesSeleccionado();
+  </script>
+</body>
+</html>
